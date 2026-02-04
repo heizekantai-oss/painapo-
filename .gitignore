@@ -1,0 +1,9 @@
+# パスワードファイルを除外（絶対守る！）
+.streamlit/secrets.toml
+
+# 不要なゴミを除外
+__pycache__/
+*.pyc
+.DS_Store
+venv/
+.venv/

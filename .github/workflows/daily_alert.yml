@@ -1,0 +1,43 @@
+name: Daily Stock Alert
+
+# トリガー: いつ実行するか
+on:
+  schedule:
+    # 日本時間 9:00 (UTC 0:00) に毎日実行
+    # ※GitHubはUTC(世界協定時)基準なので JST-9時間 で設定します
+    - cron: '0 0 * * *'
+  
+  # 手動でも実行できるようにするボタン（テスト用）
+  workflow_dispatch:
+
+jobs:
+  run-alert:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. コードを持ってくる
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # 2. Pythonをセットアップする
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      # 3. ライブラリをインストールする
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      # 4. 設定ファイル(secrets.toml)をその場で作る
+      # ※セキュリティのため、GitHub上の「Secrets」という金庫から情報を取り出してファイルを作ります
+      - name: Create secrets.toml
+        run: |
+          mkdir -p .streamlit
+          echo 'slack_webhook_url = "${{ secrets.SLACK_WEBHOOK_URL }}"' > .streamlit/secrets.toml
+          echo 'discord_webhook_url = "${{ secrets.DISCORD_WEBHOOK_URL }}"' >> .streamlit/secrets.toml
+
+      # 5. バッチプログラムを実行する
+      - name: Run Alert Script
+        run: python alert_job.py
