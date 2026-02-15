@@ -2,8 +2,8 @@ name: Daily Stock Alert
 
 on:
   schedule:
-    - cron: '0 0 * * *'
-  workflow_dispatch:
+    - cron: '0 0 * * *' # 日本時間の午前9時に自動実行されます
+  workflow_dispatch:    # 手動実行ボタンを残す魔法の言葉
 
 jobs:
   run-alert:
@@ -22,24 +22,12 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      # ▼ 探偵ロボット（金庫チェック） ▼
-      - name: Secret Test
-        run: |
-          echo "--- 金庫のチェックを開始します ---"
-          if [ -z "${{ secrets.SLACK_WEBHOOK_URL }}" ] && [ -z "${{ secrets.slack_webhook_url }}" ]; then
-            echo "🚨 エラー: GitHubの金庫が完全に【空っぽ】です！設定画面の登録がうまくいっていません。"
-            exit 1
-          else
-            echo "🌟 成功: GitHubの金庫からURLを正しく見つけました！"
-          fi
-
       - name: Create secrets.toml
         run: |
           mkdir -p .streamlit
           echo 'slack_webhook_url = "${{ secrets.SLACK_WEBHOOK_URL }}"' > .streamlit/secrets.toml
           echo 'discord_webhook_url = "${{ secrets.DISCORD_WEBHOOK_URL }}"' >> .streamlit/secrets.toml
 
-      # ▼ ここを修正しました（大文字だけに統一） ▼
       - name: Run Alert Script
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
