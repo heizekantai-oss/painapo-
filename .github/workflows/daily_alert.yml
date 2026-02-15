@@ -31,7 +31,6 @@ jobs:
           pip install -r requirements.txt
 
       # 4. 設定ファイル(secrets.toml)をその場で作る
-      # ※セキュリティのため、GitHub上の「Secrets」という金庫から情報を取り出してファイルを作ります
       - name: Create secrets.toml
         run: |
           mkdir -p .streamlit
@@ -39,5 +38,9 @@ jobs:
           echo 'discord_webhook_url = "${{ secrets.discord_webhook_url }}"' >> .streamlit/secrets.toml
 
       # 5. バッチプログラムを実行する
+      # ▼ 追加: プログラムに「直接」URLを手渡しします ▼
       - name: Run Alert Script
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.slack_webhook_url }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.discord_webhook_url }}
         run: python alert_job.py

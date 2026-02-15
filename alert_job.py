@@ -5,8 +5,9 @@ import os
 
 # --- 設定読み込み ---
 SECRETS = utils.load_secrets()
-SLACK_WEBHOOK_URL = SECRETS.get("slack_webhook_url", "")
-DISCORD_WEBHOOK_URL = SECRETS.get("discord_webhook_url", "") # Discordを追加
+# ▼ 追加: GitHubから「直接」URLを受け取れるようにします ▼
+SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL") or SECRETS.get("slack_webhook_url", "")
+DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL") or SECRETS.get("discord_webhook_url", "") # Discordを追加
 
 PORTFOLIO_FILE = "portfolio.csv"
 
