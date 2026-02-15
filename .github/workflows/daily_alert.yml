@@ -1,13 +1,8 @@
 name: Daily Stock Alert
 
-# トリガー: いつ実行するか
 on:
   schedule:
-    # 日本時間 9:00 (UTC 0:00) に毎日実行
-    # ※GitHubはUTC(世界協定時)基準なので JST-9時間 で設定します
     - cron: '0 0 * * *'
-  
-  # 手動でも実行できるようにするボタン（テスト用）
   workflow_dispatch:
 
 jobs:
@@ -15,32 +10,38 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      # 1. コードを持ってくる
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 2. Pythonをセットアップする
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      # 3. ライブラリをインストールする
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
 
-      # 4. 設定ファイル(secrets.toml)をその場で作る
+      # ▼ 探偵ロボット（金庫チェック） ▼
+      - name: Secret Test
+        run: |
+          echo "--- 金庫のチェックを開始します ---"
+          if [ -z "${{ secrets.SLACK_WEBHOOK_URL }}" ] && [ -z "${{ secrets.slack_webhook_url }}" ]; then
+            echo "🚨 エラー: GitHubの金庫が完全に【空っぽ】です！設定画面の登録がうまくいっていません。"
+            exit 1
+          else
+            echo "🌟 成功: GitHubの金庫からURLを正しく見つけました！"
+          fi
+
       - name: Create secrets.toml
         run: |
           mkdir -p .streamlit
-          echo 'slack_webhook_url = "${{ secrets.slack_webhook_url }}"' > .streamlit/secrets.toml
-          echo 'discord_webhook_url = "${{ secrets.discord_webhook_url }}"' >> .streamlit/secrets.toml
+          echo 'slack_webhook_url = "${{ secrets.SLACK_WEBHOOK_URL }}"' > .streamlit/secrets.toml
+          echo 'discord_webhook_url = "${{ secrets.DISCORD_WEBHOOK_URL }}"' >> .streamlit/secrets.toml
 
-      # 5. バッチプログラムを実行する
-      # ▼ 追加: プログラムに「直接」URLを手渡しします ▼
       - name: Run Alert Script
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.slack_webhook_url }}
-          DISCORD_WEBHOOK_URL: ${{ secrets.discord_webhook_url }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          slack_webhook_url: ${{ secrets.slack_webhook_url }}
         run: python alert_job.py
