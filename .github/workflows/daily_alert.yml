@@ -39,9 +39,9 @@ jobs:
           echo 'slack_webhook_url = "${{ secrets.SLACK_WEBHOOK_URL }}"' > .streamlit/secrets.toml
           echo 'discord_webhook_url = "${{ secrets.DISCORD_WEBHOOK_URL }}"' >> .streamlit/secrets.toml
 
+      # ▼ ここを修正しました（大文字だけに統一） ▼
       - name: Run Alert Script
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          slack_webhook_url: ${{ secrets.slack_webhook_url }}
         run: python alert_job.py
