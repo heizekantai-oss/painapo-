@@ -35,8 +35,8 @@ jobs:
       - name: Create secrets.toml
         run: |
           mkdir -p .streamlit
-          echo 'slack_webhook_url = "${{ secrets.SLACK_WEBHOOK_URL }}"' > .streamlit/secrets.toml
-          echo 'discord_webhook_url = "${{ secrets.DISCORD_WEBHOOK_URL }}"' >> .streamlit/secrets.toml
+          echo 'slack_webhook_url = "${{ secrets.slack_webhook_url }}"' > .streamlit/secrets.toml
+          echo 'discord_webhook_url = "${{ secrets.discord_webhook_url }}"' >> .streamlit/secrets.toml
 
       # 5. バッチプログラムを実行する
       - name: Run Alert Script
