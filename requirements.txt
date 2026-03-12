@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 streamlit
 pandas
 numpy
@@ -8,19 +7,5 @@ scikit-learn
 google-generativeai
 requests
 toml
-requests
 gspread
-=======
-streamlit
-pandas
-numpy
-yfinance
-plotly
-scikit-learn
-google-generativeai
-requests
-toml
-requests
-gspread
->>>>>>> fa90f37b1a1ba3403231d5f3d19cd802ee1bdde5
 google-auth
