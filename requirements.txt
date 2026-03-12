@@ -9,3 +9,4 @@ requests
 toml
 requests
 gspread
+google-auth

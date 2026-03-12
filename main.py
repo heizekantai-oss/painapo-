@@ -50,16 +50,117 @@ def get_macro_data_cached(period):
     return data_loader.get_macro_trend(period)
 
 # --- CSV保存用の関数 ---
-PORTFOLIO_FILE = "portfolio.csv"
+# --- スプレッドシート保存用の関数 (CSVから変更) ---
+import gspread
+from google.oauth2.service_account import Credentials
+import json
+
+def get_gspread_client():
+    # StreamlitのSecretsからGoogleの合鍵を読み込む
+    gcp_json_str = st.secrets["GCP_CREDENTIALS"]
+    creds_dict = json.loads(gcp_json_str)
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+    return gspread.authorize(creds)
 
 def load_portfolio():
-    if os.path.exists(PORTFOLIO_FILE):
-        return pd.read_csv(PORTFOLIO_FILE)
-    return pd.DataFrame(columns=["銘柄コード", "銘柄名", "保有株数", "取得単価", "通知価格"])
+    try:
+        client = get_gspread_client()
+        # SPREADSHEET_IDを使ってシートを開く
+        sheet = client.open_by_key(st.secrets["SPREADSHEET_ID"]).sheet1
+        records = sheet.get_all_records()
+        if records:
+            return pd.DataFrame(records)
+        else:
+            return pd.DataFrame(columns=["銘柄コード", "銘柄名", "保有株数", "取得単価", "通知価格", "通知先"])
+    except Exception as e:
+        st.error(f"スプレッドシートの読み込みエラー: {e}")
+        return pd.DataFrame(columns=["銘柄コード", "銘柄名", "保有株数", "取得単価", "通知価格", "通知先"])
 
 def save_portfolio(df):
-    df.to_csv(PORTFOLIO_FILE, index=False)
+    try:
+        client = get_gspread_client()
+        sheet = client.open_by_key(st.secrets["SPREADSHEET_ID"]).sheet1
+        sheet.clear() # 一旦シートを空にする
+        # データをスプレッドシートに書き込む
+        df_filled = df.fillna("")
+        sheet.update(values=[df_filled.columns.values.tolist()] + df_filled.values.tolist(), range_name="A1")
+    except Exception as e:
+        st.error(f"スプレッドシートの保存エラー: {e}")
 
+# === ポートフォリオ入力用のポップアップ画面 ===
+@st.dialog("ポートフォリオ管理")
+def portfolio_dialog():
+    st.write("銘柄を検索して追加するか、下の表を直接編集してください。")
+    
+    current_df = load_portfolio()
+    
+    # 互換性維持（足りない列を自動追加）
+    if "銘柄名" not in current_df.columns: current_df["銘柄名"] = ""
+    if "通知価格" not in current_df.columns: current_df["通知価格"] = 0
+    if "通知先" not in current_df.columns: current_df["通知先"] = "SLACK"
+
+    # --- 1. 検索＆追加エリア ---
+    st.markdown("##### 新規追加")
+    
+    search_options = {}
+    for cat, stocks in utils.COMPANY_DICT.items():
+        for name, code in stocks.items():
+            label = f"{name} ({code})"
+            search_options[label] = {"code": code, "name": name}
+    
+    c1, c2 = st.columns([2, 1])
+    with c1:
+        selected_label = st.selectbox("銘柄を検索 (名称またはコード)", options=list(search_options.keys()), index=None, placeholder="入力して検索...")
+    
+    c_add1, c_add2, c_add3, c_add4, c_add5 = st.columns(5)
+    qty_input = c_add1.number_input("株数", min_value=100, step=100, value=100, key="add_qty")
+    cost_input = c_add2.number_input("取得単価", min_value=0.0, step=10.0, value=0.0, key="add_cost")
+    alert_input = c_add3.number_input("通知価格", min_value=0.0, step=10.0, value=0.0, key="add_alert")
+    dest_input = c_add4.selectbox("通知先", options=["SLACK", "DISCORD"], key="add_dest")
+    
+    if c_add5.button("リストに追加", type="primary"):
+        if selected_label:
+            target_data = search_options[selected_label]
+            new_row = pd.DataFrame([{
+                "銘柄コード": target_data["code"], "銘柄名": target_data["name"],
+                "保有株数": qty_input, "取得単価": cost_input, 
+                "通知価格": alert_input, "通知先": dest_input
+            }])
+            current_df = new_row if current_df.empty else pd.concat([current_df, new_row], ignore_index=True)
+            save_portfolio(current_df)
+            st.session_state["my_portfolio"] = current_df
+            st.rerun()
+        else:
+            st.warning("銘柄を選択してください")
+
+    st.markdown("---")
+
+    # --- 2. 編集エリア ---
+    st.markdown("##### 保有リスト編集")
+    st.caption("変更内容は「保存して閉じる」を押すとスプレッドシートに書き込まれます。")
+
+    edited_df = st.data_editor(
+        current_df, num_rows="dynamic", use_container_width=True,
+        column_config={
+            "銘柄コード": st.column_config.TextColumn(width="small", required=True),
+            "銘柄名": st.column_config.TextColumn(width="medium"),
+            "保有株数": st.column_config.NumberColumn(min_value=0, step=100, format="%.0f"),
+            "取得単価": st.column_config.NumberColumn(min_value=0, format="%.0f"),
+            "通知価格": st.column_config.NumberColumn(min_value=0, format="%.0f"),
+            "通知先": st.column_config.SelectboxColumn(options=["SLACK", "DISCORD"], width="small")
+        },
+        key="dialog_editor"
+    )
+    
+    if st.button("保存して閉じる", type="primary"):
+        save_portfolio(edited_df)
+        st.session_state["my_portfolio"] = edited_df
+        st.rerun()
+# ============================================
 # === ポートフォリオ入力用のポップアップ画面 ===
 @st.dialog("ポートフォリオ管理")
 def portfolio_dialog():
