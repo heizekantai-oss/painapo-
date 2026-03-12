@@ -3,80 +3,70 @@ import yfinance as yf
 import src.utils as utils
 import os
 
-# --- 設定読み込み ---
-SECRETS = utils.load_secrets()
-# ▼ 追加: GitHubから「直接」URLを受け取れるようにします ▼
-SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL") or SECRETS.get("slack_webhook_url", "")
-DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL") or SECRETS.get("discord_webhook_url", "") # Discordを追加
+# --- 1. GitHubの金庫（Secrets）からURLを読み込む ---
+# ユーザーが画面から入力したURLが、この変数（環境変数）に渡される仕組みです
+SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL")
+DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 
 PORTFOLIO_FILE = "portfolio.csv"
 
 def main():
-    print("--- 株価アラートジョブ開始 ---")
+    print("--- 画面登録銘柄の自動チェック開始 ---")
     
-    # 1. Webhook URLの確認
-    if not SLACK_WEBHOOK_URL and not DISCORD_WEBHOOK_URL:
-        print("エラー: secrets.toml に通知用URL (Slack または Discord) が設定されていません")
-        return
-
-    # 2. ファイルの読み込み
-    # スクリプトの場所を基準にファイルパスを解決
+    # 2. ポートフォリオファイルの読み込み
     base_dir = os.path.dirname(os.path.abspath(__file__))
     file_path = os.path.join(base_dir, PORTFOLIO_FILE)
 
     if not os.path.exists(file_path):
-        print(f"エラー: {PORTFOLIO_FILE} が見つかりません。アプリでポートフォリオを作成してください。")
+        print(f"通知対象なし: {PORTFOLIO_FILE} がまだ作成されていません。")
         return
 
-    df = pd.read_csv(file_path)
+    try:
+        df = pd.read_csv(file_path)
+    except Exception as e:
+        print(f"ファイル読み込みエラー: {e}")
+        return
+
     if df.empty:
-        print("ポートフォリオが空です")
+        print("ポートフォリオに銘柄が登録されていません。")
         return
 
-    # 3. 株価チェック
-    alert_log = []
-    
+    # 3. 1行ずつ（ユーザーが登録した銘柄ごとに）チェック
     for index, row in df.iterrows():
-        t_code = row["銘柄コード"]
-        t_name = row["銘柄名"] if "銘柄名" in row and row["銘柄名"] else t_code
-        t_target = float(row["通知価格"]) if row["通知価格"] else 0
-        
-        if t_code and t_target > 0:
-            try:
-                # 現在値取得
-                ticker = yf.Ticker(t_code)
-                hist = ticker.history(period="1d")
-                if not hist.empty:
-                    cur_price = hist['Close'].iloc[-1]
-                    print(f"チェック中: {t_name} ({t_code}) -> {cur_price:,.0f} (目標: {t_target:,.0f})")
+        # CSVの列名は、お手元の「マイポートフォリオ」機能の保存形式に合わせています
+        t_code = row.get("銘柄コード")
+        t_name = row.get("銘柄名") or t_code
+        t_target = row.get("通知価格")
+
+        if not t_code or pd.isna(t_target):
+            continue
+
+        try:
+            t_target = float(t_target)
+            ticker = yf.Ticker(str(t_code))
+            hist = ticker.history(period="1d")
+            
+            if not hist.empty:
+                cur_price = hist['Close'].iloc[-1]
+                print(f"チェック中: {t_name} ({t_code}) -> 現在値: {cur_price:,.1f}")
+
+                # 目標超え判定
+                if cur_price >= t_target:
+                    message = f"🌟【目標到達！】\nあなたが登録した銘柄が目標価格を超えました。\n\n銘柄: {t_name} ({t_code})\n現在値: {cur_price:,.1f}\n目標値: {t_target:,.1f}"
                     
-                    # 目標超え判定
-                    if cur_price >= t_target:
-                        # メッセージは見やすさ重視で共通フォーマットにします
-                        alert_log.append(f"【到達】 {t_name} ({t_code})\n   現在値: {cur_price:,.0f} (目標: {t_target:,.0f})")
-            except Exception as e:
-                print(f"エラー ({t_code}): {e}")
-
-    # 4. 通知送信
-    if alert_log:
-        msg_body = "\n------------------\n".join(alert_log)
+                    # 💡 登録されているURLすべてに送る（ユーザーが指定した宛先に届く）
+                    if SLACK_WEBHOOK_URL:
+                        utils.send_slack_notification(SLACK_WEBHOOK_URL, message)
+                        print(f"  -> ✅ Slackに通知しました")
+                    
+                    if DISCORD_WEBHOOK_URL:
+                        utils.send_discord_notification(DISCORD_WEBHOOK_URL, message)
+                        print(f"  -> ✅ Discordに通知しました")
         
-        # Slackに送信
-        if SLACK_WEBHOOK_URL:
-            slack_msg = "*【朝の自動チェック】*\n" + msg_body
-            res_slack = utils.send_slack_notification(SLACK_WEBHOOK_URL, slack_msg)
-            print(f"Slack通知: {res_slack}")
-            
-        # Discordに送信
-        if DISCORD_WEBHOOK_URL:
-            discord_msg = "**【朝の自動チェック】**\n" + msg_body
-            res_discord = utils.send_discord_notification(DISCORD_WEBHOOK_URL, discord_msg)
-            print(f"Discord通知: {res_discord}")
-            
-    else:
-        print("目標到達銘柄はありませんでした")
+        except Exception as e:
+            print(f"⚠️ エラー ({t_code}): {e}")
 
-    print("--- 完了 ---")
+    print("--- 全チェック完了 ---")
 
 if __name__ == "__main__":
     main()
