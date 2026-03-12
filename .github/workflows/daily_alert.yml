@@ -32,4 +32,5 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
         run: python alert_job.py
